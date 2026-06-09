@@ -1,3 +1,4 @@
+name: Fossid Stateless Diff Scan
 
 on:
   pull_request:
@@ -11,7 +12,7 @@ permissions:
 jobs:
   run-diffscan:
     name: Fossid Annotate PR
-    if: ${{ github.event_name == 'workflow_dispatch' || ! github.event.pull_request.head.repo.fork }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     container:
       image: quay.io/fossid/fossid-toolbox:1.5.29
