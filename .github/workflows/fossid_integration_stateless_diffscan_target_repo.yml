@@ -1,4 +1,8 @@
+name: Fossid Stateless Diff Scan
+
 on:
+  pull_request:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       pr_number:
@@ -6,9 +10,14 @@ on:
         required: true
         type: number
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   run-diffscan:
     name: Fossid Annotate PR
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     container:
       image: quay.io/fossid/fossid-toolbox:1.5.29
@@ -17,6 +26,7 @@ jobs:
         password: ${{ secrets.FOSSID_CONTAINER_PASSWORD }}
     steps:
       - name: Get PR refs
+        if: github.event_name == 'workflow_dispatch'
         id: pr
         uses: actions/github-script@v7
         with:
@@ -27,14 +37,12 @@ jobs:
               pull_number: ${{ github.event.inputs.pr_number }}
             });
             core.setOutput('base_ref', pr.base.ref);
-            core.setOutput('head_ref', pr.head.ref);
             core.setOutput('head_sha', pr.head.sha);
-      - name: Show fossid diffscan help
-        run: fossid diffscan --help
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.pr.outputs.head_sha }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && steps.pr.outputs.head_sha || '' }}
           fetch-depth: 0
 
       - name: Checkout ignore projects file
@@ -50,14 +58,16 @@ jobs:
         env:
           FOSSID_HOST_USERNAME: ${{ secrets.FOSSID_HOST_USERNAME }}
           FOSSID_HOST_TOKEN: ${{ secrets.FOSSID_HOST_TOKEN }}
-          GITHUB_EVENT_NAME: pull_request
-          GITHUB_BASE_REF: ${{ steps.pr.outputs.base_ref }}
-          GITHUB_HEAD_REF: ${{ steps.pr.outputs.head_ref }}
         run: |
+          EXTRA_ARGS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EXTRA_ARGS="--base-ref origin/${{ steps.pr.outputs.base_ref }} --compare-ref ${{ steps.pr.outputs.head_sha }}"
+          fi
           fossid \
             diffscan \
             --fossid-host $FOSSID_HOST_USERNAME \
             --fossid-token $FOSSID_HOST_TOKEN \
             --format github \
             --fail \
-            --ignore-projects tools/ignore_projects_fossid
+            --ignore-projects tools/ignore_projects_fossid \
+            $EXTRA_ARGS
