@@ -29,7 +29,8 @@ jobs:
             core.setOutput('base_ref', pr.base.ref);
             core.setOutput('head_ref', pr.head.ref);
             core.setOutput('head_sha', pr.head.sha);
-
+      - name: Show fossid diffscan help
+        run: fossid diffscan --help
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
