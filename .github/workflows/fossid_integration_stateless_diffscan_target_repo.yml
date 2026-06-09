@@ -10,11 +10,37 @@ permissions:
   pull-requests: read
 
 jobs:
-  call-fossid-workflow:
-    if: ${{ github.event_name == 'workflow_dispatch' || ! github.event.pull_request.head.repo.fork }}
-    uses: rdkcentral/build_tools_workflows/.github/workflows/fossid_integration_stateless_diffscan.yml@1.0.0
-    secrets:
-        FOSSID_CONTAINER_USERNAME: ${{ secrets.FOSSID_CONTAINER_USERNAME }}
-        FOSSID_CONTAINER_PASSWORD: ${{ secrets.FOSSID_CONTAINER_PASSWORD }}
-        FOSSID_HOST_USERNAME: ${{ secrets.FOSSID_HOST_USERNAME }}
-        FOSSID_HOST_TOKEN: ${{ secrets.FOSSID_HOST_TOKEN }}
+  run-diffscan:
+    name: Fossid Annotate PR
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    container:
+      image: quay.io/fossid/fossid-toolbox:1.5.29
+      credentials:
+        username: ${{ secrets.FOSSID_CONTAINER_USERNAME }}
+        password: ${{ secrets.FOSSID_CONTAINER_PASSWORD }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Checkout ignore projects file
+        uses: actions/checkout@v4
+        with:
+          repository: rdkcentral/build_tools_workflows
+          sparse-checkout: |
+            ignore_projects_fossid
+          ref: develop
+          path: tools
+
+      - name: Run fossid-toolbox
+        env:
+          FOSSID_HOST_USERNAME: ${{ secrets.FOSSID_HOST_USERNAME }}
+          FOSSID_HOST_TOKEN: ${{ secrets.FOSSID_HOST_TOKEN }}
+        run: |
+          fossid \
+            diffscan \
+            --fossid-host $FOSSID_HOST_USERNAME \
+            --fossid-token $FOSSID_HOST_TOKEN \
+            --format github \
+            --fail \
+            --ignore-projects tools/ignore_projects_fossid
