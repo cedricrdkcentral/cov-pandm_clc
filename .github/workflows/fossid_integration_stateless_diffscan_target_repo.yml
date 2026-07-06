@@ -12,7 +12,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write   # Fix 1: fossid needs write to post results/comments on the PR
+  pull-requests: write
+  checks: write        # allow the reusable workflow to create the check run
 
 jobs:
   # Automatic scan for internal PRs (same repo, not a fork)
