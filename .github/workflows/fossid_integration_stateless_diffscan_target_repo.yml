@@ -1,72 +1,20 @@
 name: Fossid Stateless Diff Scan
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
-  workflow_dispatch:                          # NEW: manual trigger
-    inputs:
-      pr_number:
-        description: 'PR number to scan (including fork PRs)'
-        required: true
-        type: string
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write        # allow the reusable workflow to create the check run
 
 jobs:
-  # Automatic scan for internal PRs (same repo, not a fork)
   call-fossid-pr:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    uses: rdkcentral/build_tools_workflows/.github/workflows/fossid_integration_stateless_diffscan.yml@feature/fossid-wflow-dispatch
-    secrets:
-      FOSSID_CONTAINER_USERNAME: ${{ secrets.FOSSID_CONTAINER_USERNAME }}
-      FOSSID_CONTAINER_PASSWORD: ${{ secrets.FOSSID_CONTAINER_PASSWORD }}
-      FOSSID_HOST_USERNAME: ${{ secrets.FOSSID_HOST_USERNAME }}
-      FOSSID_HOST_TOKEN: ${{ secrets.FOSSID_HOST_TOKEN }}
-
-  # Manual scan for any PR (including fork PRs) — step 1: resolve refs
-  resolve-pr-refs:
-    name: Resolve PR Refs
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    outputs:
-      base_ref: ${{ steps.pr.outputs.base_ref }}
-      head_sha: ${{ steps.pr.outputs.head_sha }}
-      pr_number: ${{ steps.pr.outputs.pr_number }}
-    steps:
-      - name: Get PR details
-        id: pr
-        uses: actions/github-script@v7   # Fix 2: use the published major version
-        env:
-          PR_NUMBER_INPUT: ${{ github.event.inputs.pr_number }}   # Fix 4: consistent, injection-safe input access
-        with:
-          script: |
-            const prNumber = parseInt(process.env.PR_NUMBER_INPUT, 10);
-            // Fix 3: fail fast on invalid input instead of passing NaN to the API
-            if (!Number.isInteger(prNumber) || prNumber <= 0) {
-              core.setFailed(`Invalid PR number: ${process.env.PR_NUMBER_INPUT}`);
-              return;
-            }
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber
-            });
-            core.setOutput('base_ref', pr.base.ref);
-            core.setOutput('head_sha', pr.head.sha);
-            core.setOutput('pr_number', String(prNumber));
-
-  # Manual scan for any PR (including fork PRs) — step 2: run fossid with explicit refs
-  call-fossid-dispatch:
-    if: github.event_name == 'workflow_dispatch'
-    needs: [resolve-pr-refs]
-    uses: rdkcentral/build_tools_workflows/.github/workflows/fossid_integration_stateless_diffscan.yml@feature/fossid-wflow-dispatch
+    name: FOSSID
+    uses: rdkcentral/build_tools_workflows/.github/workflows/fossid_integration_stateless_diffscan.yml@feature/fossid-wflow-prt
     with:
-      base_ref: ${{ needs.resolve-pr-refs.outputs.base_ref }}
-      compare_ref: ${{ needs.resolve-pr-refs.outputs.head_sha }}
-      pr_number: ${{ needs.resolve-pr-refs.outputs.pr_number }}   # Fix 4: use validated output, not the raw input
+      pr_number: ${{ github.event.pull_request.number }}
+      base_ref: ${{ github.event.pull_request.base.ref }}
+      compare_ref: ${{ github.event.pull_request.head.sha }}
     secrets:
       FOSSID_CONTAINER_USERNAME: ${{ secrets.FOSSID_CONTAINER_USERNAME }}
       FOSSID_CONTAINER_PASSWORD: ${{ secrets.FOSSID_CONTAINER_PASSWORD }}
